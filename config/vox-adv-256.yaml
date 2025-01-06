@@ -63,14 +63,14 @@ train_params:
     generator_gan: 1
     discriminator_gan: 1
     feature_matching: [10, 10, 10, 10]
-    perceptual: [10, 10, 10, 10, 10]
+    perceptual: [10, 10, 10, 10, 10] 
     equivariance_value: 10
     equivariance_jacobian: 10
     kp_distance: 10
     kp_prior: 0
     kp_scale: 0
     depth_constraint: 0
-    verilight : .1
+    verilight : 1 #purposely high for now to see if it can decrease
 
 reconstruction_params:
   num_videos: 1000

@@ -73,12 +73,22 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
                 for i,x in enumerate(dataloader):
                     # x['source'] = x['source'].to(device)
                     # x['driving'] = x['driving'].to(device)
-                    losses_generator, generated = generator_full(x, gen_vis=True)
+                    if i % 100 == 0: # gen vis evry 100 batches
+                        losses_generator, generated = generator_full(x, gen_vis=True)
 
-                    for g in range(len(generated["generated_vis"])):
-                        cv2.imwrite(f"gen_{total*(epoch-start_epoch) + i*config["batch_size"] + g}.png", generated["generated_vis"][g])
-                        cv2.imwrite(f"mp_{total*(epoch-start_epoch) +  i*config["batch_size"] + g}.png", generated["mp_vis"][g])
-                    
+                        #log the visualizations
+                        for g in range(len(generated["generated_vis"])):
+                            # cv2.imwrite(f"gen_{total*(epoch-start_epoch) + i*config["train_params"]["batch_size"] + g}.png", generated["generated_vis"][g])
+                            # cv2.imwrite(f"mp_{total*(epoch-start_epoch) +  i*config["train_params"]["batch_size"] + g}.png", generated["mp_vis"][g])
+                            writer.add_image(f"Generated/{g}", generated["generated_vis"][g][:,:,::-1],
+                                 dataformats="HWC", global_step=total*(epoch-start_epoch) + i*config["train_params"]["batch_size"])
+                            writer.add_image(f"MediaPipe/{g}", generated["mp_vis"][g][:,:,::-1],
+                                 dataformats="HWC", global_step=total*(epoch-start_epoch) + i*config["train_params"]["batch_size"])
+                        
+                    else:
+                        losses_generator, generated = generator_full(x, gen_vis=False)
+
+              
                     loss_values = [val.mean() for val in losses_generator.values()]
                     loss = sum(loss_values)
                     loss.backward()
