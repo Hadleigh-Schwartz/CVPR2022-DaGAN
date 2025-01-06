@@ -210,7 +210,7 @@ class GeneratorFullModel(torch.nn.Module):
         """
         img : torch, RGB, N x 3 x H x W, range 0-1 because float, N is batch size
         """
-        mp_feature_values =  torch.empty(x.shape[0], len(self.mp_target_features)) # list of feature values per frame
+        mp_feature_values =  torch.zeros(x.shape[0], len(self.mp_target_features)) # list of feature values per frame
         if gen_vis:
             vis_imgs = []
         else:
@@ -218,7 +218,8 @@ class GeneratorFullModel(torch.nn.Module):
         for i in range(x.shape[0]):
             landmarks, blendshapes, padded_face = self.mp(x[i, :, :, :].permute(1, 2, 0) * 255)
             if torch.all(landmarks == 0) and torch.all(blendshapes == 0) and torch.all(padded_face == 0):
-                # TODO: Don't consider this one in loss calc since we couldn't get landmarks/blendshapes from it
+                if gen_vis:
+                    vis_imgs.append(None)
                 continue
 
             # VIS ONLY #
@@ -409,6 +410,16 @@ class GeneratorFullModel(torch.nn.Module):
 
         gen_mp_features, gen_vis_imgs = self.get_mp_features(generated['prediction'], gen_vis)
         if self.loss_weights["verilight"]:
+            # ignore cases where the entire row of features is zero, as this corresponds to a MP extraction failure
+            # and we don't want it considered in the loss function
+            source_mp_features_ok = (source_mp_features != 0).all(dim=-1).detach()
+            gen_mp_features_ok  = (gen_mp_features != 0).all(dim=-1).detach()
+            source_mp_features_ok_indices =  source_mp_features_ok.nonzero().squeeze().tolist()
+            gen_mp_features_ok_indices = gen_mp_features_ok.nonzero().squeeze().tolist()
+            ok_indices = list(set(source_mp_features_ok_indices) & set(gen_mp_features_ok_indices))
+            source_mp_features = source_mp_features[ok_indices]
+            gen_mp_features = gen_mp_features[ok_indices]
+    
             # mp_rmse = torch.mean((source_mp_features - gen_mp_features)**2)
             mp_mape = self.mape(source_mp_features, gen_mp_features)
             assert mp_mape.grad_fn is not None
@@ -431,6 +442,11 @@ class GeneratorFullModel(torch.nn.Module):
                 generated_vis.append(stacked)
             
                 # stack the mediapipe visualizations to created one
+                if source_vis_imgs[i] is None:
+                    continue
+                if gen_vis_imgs[i] is None:
+                    continue
+
                 stacked_mp_vis = np.vstack((source_vis_imgs[i], gen_vis_imgs[i]))
                 mp_vis.append(stacked_mp_vis)
 
