@@ -60,7 +60,7 @@ if __name__ == "__main__":
     parser.set_defaults(verbose=False)
     opt = parser.parse_args()
     with open(opt.config) as f:
-        config = yaml.load(f)
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
     if opt.checkpoint is not None:
         log_dir = os.path.join(*os.path.split(opt.checkpoint)[:-1])
@@ -71,9 +71,10 @@ if __name__ == "__main__":
 
     print("Training...")
 
-    dist.init_process_group(backend='nccl', init_method='env://') 
-    torch.cuda.set_device(opt.local_rank)
-    device=torch.device("cuda",opt.local_rank)
+    # dist.init_process_group(backend='nccl', init_method='env://') 
+    # torch.cuda.set_device(opt.local_rank)
+    # device=torch.device("cuda",opt.local_rank)
+    device = torch.device("cuda")
     config['train_params']['loss_weights']['depth_constraint'] = opt.depth_constraint
     config['train_params']['loss_weights']['kp_distance'] = opt.kp_distance
     if opt.kp_prior:
@@ -111,11 +112,11 @@ if __name__ == "__main__":
     kp_detector.to(device)
     if opt.verbose:
         print(kp_detector)
-    kp_detector= torch.nn.SyncBatchNorm.convert_sync_batchnorm(kp_detector)
+    # kp_detector= torch.nn.SyncBatchNorm.convert_sync_batchnorm(kp_detector)
 
-    kp_detector = DDP(kp_detector,device_ids=[opt.local_rank],broadcast_buffers=False)
-    discriminator = DDP(discriminator,device_ids=[opt.local_rank],broadcast_buffers=False)
-    generator = DDP(generator,device_ids=[opt.local_rank],broadcast_buffers=False)
+    # kp_detector = DDP(kp_detector,device_ids=[opt.local_rank],broadcast_buffers=False)
+    # discriminator = DDP(discriminator,device_ids=[opt.local_rank],broadcast_buffers=False)
+    # generator = DDP(generator,device_ids=[opt.local_rank],broadcast_buffers=False)
 
     dataset = FramesDataset(is_train=(opt.mode == 'train'), **config['dataset_params'])
     if not os.path.exists(log_dir):
@@ -127,4 +128,5 @@ if __name__ == "__main__":
         os.makedirs(os.path.join(log_dir,'log'))
     writer = SummaryWriter(os.path.join(log_dir,'log'))
     if opt.mode == 'train':
-        train(config, generator, discriminator, kp_detector, opt.checkpoint, log_dir, dataset, opt.local_rank,device,opt,writer)
+        # train(config, generator, discriminator, kp_detector, opt.checkpoint, log_dir, dataset, opt.local_rank,device,opt,writer)
+        train(config, generator, discriminator, kp_detector, opt.checkpoint, log_dir, dataset, device, opt, writer)

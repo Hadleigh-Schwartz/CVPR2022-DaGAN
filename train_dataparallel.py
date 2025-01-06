@@ -21,6 +21,10 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
     optimizer_generator = torch.optim.Adam(generator.parameters(), lr=train_params['lr_generator'], betas=(0.5, 0.999))
     optimizer_discriminator = torch.optim.Adam(discriminator.parameters(), lr=train_params['lr_discriminator'], betas=(0.5, 0.999))
     optimizer_kp_detector = torch.optim.Adam(kp_detector.parameters(), lr=train_params['lr_kp_detector'], betas=(0.5, 0.999))
+    
+    f_before = open("before.txt", "w")
+    f_before.write(" ".join([str(x) for x in list(generator.parameters())[:10]]))
+    f_before.close()
 
     if checkpoint is not None:
         start_epoch = Logger.load_cpk(checkpoint, generator, discriminator, kp_detector,
@@ -28,6 +32,11 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
                                       None if train_params['lr_kp_detector'] == 0 else optimizer_kp_detector)
     else:
         start_epoch = 0
+    
+    f_after = open("after.txt", "w")
+    f_after.write(" ".join([str(x) for x in list(generator.parameters())[:10]]))
+    f_after.close()
+    
 
     scheduler_generator = MultiStepLR(optimizer_generator, train_params['epoch_milestones'], gamma=0.1,
                                       last_epoch=start_epoch - 1)
@@ -43,7 +52,7 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
     
     generator_full = getattr(MODEL,opt.GFM)(kp_detector, generator, discriminator, train_params,opt)
     discriminator_full = DiscriminatorFullModel(kp_detector, generator, discriminator, train_params)
-    test_dataset = EvaluationDataset(dataroot='/data/fhongac/origDataset/vox1_frames',pairs_list='data/vox_evaluation.csv')
+    test_dataset = EvaluationDataset(dataroot='video-preprocessing/vox',pairs_list='data/vox_evaluation_v3.csv')
     test_dataloader = torch.utils.data.DataLoader(
             test_dataset,
             batch_size = 1,

@@ -15,6 +15,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as T
 from PIL import Image
 from PIL import ImageFile
+import cv2
 from skimage import io, img_as_float32
 import numpy as np
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -46,11 +47,14 @@ class EvaluationDataset(Dataset):
         self.dataroot = dataroot
         # self.videos = self.videos[5000]
         self.frame_shape = (3,256,256)
-        test_videos = os.listdir(os.path.join(self.dataroot,'test'))
+        test_videos = os.listdir(r"C:\Users\mobil\Desktop\verilight_attacks\CVPR2022-DaGAN\video-preprocessing\vox\test")
         self.videos = test_videos
         pairs = pd.read_csv(pairs_list)
-        self.source = pairs['source'].tolist()
-        self.driving = pairs['driving'].tolist()
+        # self.source = pairs['source'].tolist()
+        # self.driving = pairs['driving'].tolist()
+        self.videopath = pairs['video_path'].tolist()
+        self.source = pairs['source_frame'].tolist()
+        self.driving = pairs['driving_frame'].tolist()
         # self.pose_anchors = pairs['best_frame'].tolist()
         
         self.transforms = T.Compose([T.ToTensor(),
@@ -69,10 +73,12 @@ class EvaluationDataset(Dataset):
         Step 3: convert your data to a PyTorch tensor. You can use helpder functions such as self.transform. e.g., data = self.transform(image)
         Step 4: return a data point as a dictionary.
         """
-        path_source = self.source[idx]
-        path_driving = self.driving[idx]
+        path_video = self.videopath[idx]
+        path_source = rf"{os.path.splitext(path_video)[0]}_frame_{self.source[idx]}.png"
+        path_driving =  rf"{os.path.splitext(path_video)[0]}_frame_{self.driving[idx]}.png"
         # path_anchor = self.pose_anchors[idx]
         anchor = ''
+
         source = img_as_float32(io.imread(path_source))
         source = np.array(source, dtype='float32')
         source = torch.tensor(source.transpose((2, 0, 1)))

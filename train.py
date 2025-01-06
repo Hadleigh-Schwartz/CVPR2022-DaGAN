@@ -16,7 +16,7 @@ from evaluation_dataset import EvaluationDataset
 from frames_dataset import DatasetRepeater
 
 
-def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, dataset, rank,device,opt,writer):
+def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, dataset,device,opt,writer):
     train_params = config['train_params']
 
     optimizer_generator = torch.optim.Adam(generator.parameters(), lr=train_params['lr_generator'], betas=(0.5, 0.999))
@@ -39,13 +39,15 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
 
     if 'num_repeats' in train_params or train_params['num_repeats'] != 1:
         dataset = DatasetRepeater(dataset, train_params['num_repeats'])
-    sampler = torch.utils.data.distributed.DistributedSampler(dataset,num_replicas=torch.cuda.device_count(),rank=rank)
-    dataloader = DataLoader(dataset, batch_size=train_params['batch_size'], shuffle=False, num_workers=16,sampler=sampler, drop_last=True)
+    # sampler = torch.utils.data.distributed.DistributedSampler(dataset,num_replicas=torch.cuda.device_count(),rank=rank)
+    # dataloader = DataLoader(dataset, batch_size=train_params['batch_size'], shuffle=False, num_workers=16,sampler=sampler, drop_last=True)
+
+    dataloader = DataLoader(dataset, batch_size=train_params['batch_size'], shuffle=True, num_workers=16, drop_last=True)
 
     
     generator_full = getattr(MODEL,opt.GFM)(kp_detector, generator, discriminator, train_params,opt)
     discriminator_full = DiscriminatorFullModel(kp_detector, generator, discriminator, train_params)
-    test_dataset = EvaluationDataset(dataroot='/data/fhongac/origDataset/vox1_frames',pairs_list='data/vox_evaluation.csv')
+    test_dataset = EvaluationDataset(dataroot=r"CVPR2022-DaGAN/video-preprocessing/vox",pairs_list='data/vox_evaluation_v3.csv')
     test_dataloader = torch.utils.data.DataLoader(
             test_dataset,
             batch_size = 1,
@@ -54,7 +56,7 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
     with Logger(log_dir=log_dir, visualizer_params=config['visualizer_params'], checkpoint_freq=train_params['checkpoint_freq']) as logger:
         for epoch in trange(start_epoch, train_params['num_epochs']):
             #parallel
-            sampler.set_epoch(epoch)
+            # sampler.set_epoch(epoch)
             total = len(dataloader)
             epoch_train_loss = 0
             generator.train(), discriminator.train(), kp_detector.train()

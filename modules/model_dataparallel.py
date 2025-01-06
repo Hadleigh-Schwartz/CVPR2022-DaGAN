@@ -8,6 +8,13 @@ from torch.autograd import grad
 import pdb
 import depth
 
+import cv2
+import sys
+sys.path.append("../")
+from mp_face_landmarker import PyTorchMediapipeFaceLandmarker
+from hadleigh_utils import compare_to_real_mediapipe
+
+
 class Vgg19(torch.nn.Module):
     """
     Vgg19 network for perceptual loss. See Sec 3.3.
@@ -150,8 +157,8 @@ class GeneratorFullModel(torch.nn.Module):
                 self.vgg = self.vgg.cuda()
         self.depth_encoder = depth.ResnetEncoder(50, False).cuda()
         self.depth_decoder = depth.DepthDecoder(num_ch_enc=self.depth_encoder.num_ch_enc, scales=range(4)).cuda()
-        loaded_dict_enc = torch.load('depth/models/depth_face_model_Voxceleb2_10w/encoder.pth',map_location='cpu')
-        loaded_dict_dec = torch.load('depth/models/depth_face_model_Voxceleb2_10w/depth.pth',map_location='cpu')
+        loaded_dict_enc = torch.load('depth/models/encoder.pth',map_location='cpu')
+        loaded_dict_dec = torch.load('depth/models/depth.pth',map_location='cpu')
         filtered_dict_enc = {k: v for k, v in loaded_dict_enc.items() if k in self.depth_encoder.state_dict()}
         self.depth_encoder.load_state_dict(filtered_dict_enc)
         self.depth_decoder.load_state_dict(loaded_dict_dec)
@@ -159,6 +166,11 @@ class GeneratorFullModel(torch.nn.Module):
         self.set_requires_grad(self.depth_decoder, False) 
         self.depth_decoder.eval()
         self.depth_encoder.eval()
+
+        # define MediaPipe face landmarker for attack
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.mp = PyTorchMediapipeFaceLandmarker(device, long_range_face_detect=False, short_range_face_detect=False).to(device)
+
     def set_requires_grad(self, nets, requires_grad=False):
         """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
         Parameters:
@@ -172,6 +184,20 @@ class GeneratorFullModel(torch.nn.Module):
                 for param in net.parameters():
                     param.requires_grad = requires_grad
     def forward(self, x):
+        # TODO: check format and what x['source'] looks like. This may be what
+        # we need to pass into MediaPipe landmarker later in this function for loss calc...
+
+        print("HI FROM HADLEIGH ", x['source'].dtype, x['source'].get_device(), x['source'].shape)
+        for i in range(x['source'].shape[0]):
+            meow = x['source'][i, :, :, :].detach().cpu().permute(1, 2, 0).numpy() * 255
+            cv2.imwrite(f"meow{i}.png", meow)
+            landmarks, blendshapes, padded_face = self.mp(x['source'][i, :, :, :].permute(1, 2, 0) * 255)
+            padded_face = padded_face.detach().cpu().numpy().astype(np.uint8)
+            cv2.imwrite(f"padded_face{i}.png", padded_face)
+            blendshapes_np = blendshapes.detach().cpu().numpy()
+            landmarks_np = landmarks.detach().cpu().numpy()
+            compare_to_real_mediapipe(landmarks, blendshapes_np, padded_face, save_landmark_comparison=False, display=False, save_path=f"comp_{i}.png")
+
         depth_source = None
         depth_driving = None
         outputs = self.depth_decoder(self.depth_encoder(x['source']))

@@ -137,8 +137,10 @@ class GeneratorFullModel(torch.nn.Module):
         self.discriminator = discriminator
         self.train_params = train_params
         self.scales = train_params['scales']
-        self.disc_scales = self.discriminator.module.scales
-        self.pyramid = ImagePyramide(self.scales, generator.module.num_channels)
+        # self.disc_scales = self.discriminator.module.scales
+        self.disc_scales = self.discriminator.scales
+        # self.pyramid = ImagePyramide(self.scales, generator.module.num_channels)
+        self.pyramid = ImagePyramide(self.scales, generator.num_channels)
         if torch.cuda.is_available():
             self.pyramid = self.pyramid.cuda()
         self.opt = opt
@@ -150,8 +152,8 @@ class GeneratorFullModel(torch.nn.Module):
                 self.vgg = self.vgg.cuda()
         self.depth_encoder = depth.ResnetEncoder(50, False).cuda()
         self.depth_decoder = depth.DepthDecoder(num_ch_enc=self.depth_encoder.num_ch_enc, scales=range(4)).cuda()
-        loaded_dict_enc = torch.load('depth/models/depth_face_model_Voxceleb2_10w/encoder.pth',map_location='cpu')
-        loaded_dict_dec = torch.load('depth/models/depth_face_model_Voxceleb2_10w/depth.pth',map_location='cpu')
+        loaded_dict_enc = torch.load('depth/models/encoder.pth',map_location='cpu')
+        loaded_dict_dec = torch.load('depth/models/depth.pth',map_location='cpu')
         filtered_dict_enc = {k: v for k, v in loaded_dict_enc.items() if k in self.depth_encoder.state_dict()}
         self.depth_encoder.load_state_dict(filtered_dict_enc)
         self.depth_decoder.load_state_dict(loaded_dict_dec)
@@ -336,8 +338,10 @@ class DiscriminatorFullModel(torch.nn.Module):
         self.generator = generator
         self.discriminator = discriminator
         self.train_params = train_params
-        self.scales = self.discriminator.module.scales
-        self.pyramid = ImagePyramide(self.scales, generator.module.num_channels)
+        # self.scales = self.discriminator.module.scales
+        # self.pyramid = ImagePyramide(self.scales, generator.module.num_channels)
+        self.scales = self.discriminator.scales
+        self.pyramid = ImagePyramide(self.scales, generator.num_channels)
         if torch.cuda.is_available():
             self.pyramid = self.pyramid.cuda()
 
