@@ -9,9 +9,11 @@ import pdb
 import depth
 
 import cv2
+from torchmetrics.regression import MeanAbsolutePercentageError
 import sys
 sys.path.append("../")
 from mp_face_landmarker import PyTorchMediapipeFaceLandmarker
+from mp_alignment_differentiable import MPAligner
 from hadleigh_utils import compare_to_real_mediapipe
 
 
@@ -170,6 +172,10 @@ class GeneratorFullModel(torch.nn.Module):
         # define MediaPipe face landmarker for attack
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self.mp = PyTorchMediapipeFaceLandmarker(device, long_range_face_detect=False, short_range_face_detect=False).to(device)
+        self.mp_target_features = [(0, 17), (40, 17), (270, 17), (0, 91), (0, 321),
+                                 6, 7, 8, 9, 10, 11, 12, 23, 25, 50, 51] 
+        self.mp_aligner = MPAligner().to(device)
+        self.mape = MeanAbsolutePercentageError()
 
     def set_requires_grad(self, nets, requires_grad=False):
         """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
@@ -183,20 +189,68 @@ class GeneratorFullModel(torch.nn.Module):
             if net is not None:
                 for param in net.parameters():
                     param.requires_grad = requires_grad
-    def forward(self, x):
-        # TODO: check format and what x['source'] looks like. This may be what
-        # we need to pass into MediaPipe landmarker later in this function for loss calc...
+    
+    def get_mp_bbox(self, coords):
+        """
+        Get face bounding box coordinates for a frame with frame index based on MediaPipe's extracted landmarks 
 
-        print("HI FROM HADLEIGH ", x['source'].dtype, x['source'].get_device(), x['source'].shape)
-        for i in range(x['source'].shape[0]):
-            meow = x['source'][i, :, :, :].detach().cpu().permute(1, 2, 0).numpy() * 255
-            cv2.imwrite(f"meow{i}.png", meow)
-            landmarks, blendshapes, padded_face = self.mp(x['source'][i, :, :, :].permute(1, 2, 0) * 255)
+        Parameters
+        ----------
+        coords : list of 2D tuples
+            2D facial landmarks
+        """
+        cx_min = torch.min(coords[:, 0])
+        cy_min = torch.min(coords[:, 1])
+        cx_max = torch.max(coords[:, 0])
+        cy_max = torch.max(coords[:, 1])
+        bbox = torch.tensor([[cx_min, cy_min], [cx_max, cy_max]])
+        return bbox
+    
+    def get_mp_features(self, x):
+        """
+        img : torch, RGB, N x 3 x H x W, range 0-1 because float, N is batch size
+        """
+        mp_feature_values =  torch.empty(x.shape[0], len(self.mp_target_features)) # list of feature values per frame
+        for i in range(x.shape[0]):
+            landmarks, blendshapes, padded_face = self.mp(x[i, :, :, :].permute(1, 2, 0) * 255)
+            if torch.all(landmarks == 0) and torch.all(blendshapes == 0) and torch.all(padded_face == 0):
+                # TODO: Don't consider this one in loss calc since we couldn't get landmarks/blendshapes from it
+                continue
+
+            # VIS ONLY #
             padded_face = padded_face.detach().cpu().numpy().astype(np.uint8)
-            cv2.imwrite(f"padded_face{i}.png", padded_face)
             blendshapes_np = blendshapes.detach().cpu().numpy()
             landmarks_np = landmarks.detach().cpu().numpy()
             compare_to_real_mediapipe(landmarks, blendshapes_np, padded_face, save_landmark_comparison=False, display=False, save_path=f"comp_{i}.png")
+        
+
+            # align
+            W, H = torch.tensor(padded_face.shape[1]), torch.tensor(padded_face.shape[0])
+            _, landmark_coords_2d_aligned = self.mp_aligner(landmarks, W, H, W, H)
+
+            # compute feature values for the frame
+            bbox = self.get_mp_bbox(landmark_coords_2d_aligned)
+            bbox_W = bbox[1, 0] - bbox[0, 0]
+            bbox_H = bbox[1, 1] - bbox[0, 1]
+            for feat_num, feature in enumerate(self.mp_target_features):
+                if type(feature) == int: # this is a blendshape
+                    mp_feature_values[i, feat_num] = blendshapes[feature]
+                else: # this is a facial landmark distance
+                    lm1 = landmark_coords_2d_aligned[feature[0]]
+                    lm2 = landmark_coords_2d_aligned[feature[1]]
+                    x_diff = lm1[0] - lm2[0]
+                    x_diff /= bbox_W
+                    y_diff = lm1[1] - lm2[1]
+                    y_diff /= bbox_H
+                    distance = torch.sqrt(x_diff**2 + y_diff**2)
+                    mp_feature_values[i, feat_num] = distance
+
+          
+        return mp_feature_values
+
+    def forward(self, x):
+        
+        source_mp_features = self.get_mp_features(x['source'])
 
         depth_source = None
         depth_driving = None
@@ -347,6 +401,25 @@ class GeneratorFullModel(torch.nn.Module):
             depth_pred = outputs[("disp", 0)]
             value_total = self.loss_weights['depth_constraint']*torch.abs(depth_driving-depth_pred).mean()
             loss_values['depth_constraint'] = value_total
+
+        gen_mp_features = self.get_mp_features(generated['prediction'])
+        if self.loss_weights["verilight"]:
+            mp_rmse = torch.mean((source_mp_features - gen_mp_features)**2)
+            mp_mape = self.mape(source_mp_features, gen_mp_features)
+            print(mp_rmse, mp_rmse.grad_fn, mp_mape, mp_mape.grad_fn)
+
+
+        # VIS ONLY #
+        for i in range(generated['prediction'].shape[0]):
+            gen = generated['prediction'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
+            gen = gen.astype(np.uint8)
+            source = x['source'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
+            source = source.astype(np.uint8)
+            driving = x['driving'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
+            driving = driving.astype(np.uint8)
+            stacked = np.hstack((source, driving, gen))
+            cv2.imwrite(f"res{i}.png", stacked[:,:,::-1])
+        
         return loss_values, generated
 
 

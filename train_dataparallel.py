@@ -97,8 +97,8 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
 
                     losses_generator.update(losses_discriminator)
                     losses = {key: value.mean().detach().data.cpu().numpy() for key, value in losses_generator.items()}
-                    # for k,v in losses.items():
-                    #     writer.add_scalar(k, v, total*epoch+i)
+                    for k,v in losses.items():
+                        writer.add_scalar(k, v, total*epoch+i)
                     logger.log_iter(losses=losses)
                     par.update(1)
             epoch_train_loss = epoch_train_loss/total
