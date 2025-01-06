@@ -206,11 +206,15 @@ class GeneratorFullModel(torch.nn.Module):
         bbox = torch.tensor([[cx_min, cy_min], [cx_max, cy_max]])
         return bbox
     
-    def get_mp_features(self, x):
+    def get_mp_features(self, x, gen_vis = False):
         """
         img : torch, RGB, N x 3 x H x W, range 0-1 because float, N is batch size
         """
         mp_feature_values =  torch.empty(x.shape[0], len(self.mp_target_features)) # list of feature values per frame
+        if gen_vis:
+            vis_imgs = []
+        else:
+            vis_imgs = None
         for i in range(x.shape[0]):
             landmarks, blendshapes, padded_face = self.mp(x[i, :, :, :].permute(1, 2, 0) * 255)
             if torch.all(landmarks == 0) and torch.all(blendshapes == 0) and torch.all(padded_face == 0):
@@ -218,11 +222,12 @@ class GeneratorFullModel(torch.nn.Module):
                 continue
 
             # VIS ONLY #
-            padded_face = padded_face.detach().cpu().numpy().astype(np.uint8)
-            blendshapes_np = blendshapes.detach().cpu().numpy()
-            landmarks_np = landmarks.detach().cpu().numpy()
-            compare_to_real_mediapipe(landmarks, blendshapes_np, padded_face, save_landmark_comparison=False, display=False, save_path=f"comp_{i}.png")
-        
+            if gen_vis:
+                padded_face = padded_face.detach().cpu().numpy().astype(np.uint8)
+                blendshapes_np = blendshapes.detach().cpu().numpy()
+                landmarks_np = landmarks.detach().cpu().numpy()
+                vis_img = compare_to_real_mediapipe(landmarks, blendshapes_np, padded_face, save_landmark_comparison=False, display=False, save_path=None)
+                vis_imgs.append(vis_img)
 
             # align
             W, H = torch.tensor(padded_face.shape[1]), torch.tensor(padded_face.shape[0])
@@ -246,11 +251,11 @@ class GeneratorFullModel(torch.nn.Module):
                     mp_feature_values[i, feat_num] = distance
 
           
-        return mp_feature_values
+        return mp_feature_values, vis_imgs
 
-    def forward(self, x):
+    def forward(self, x, gen_vis = False):
         
-        source_mp_features = self.get_mp_features(x['source'])
+        source_mp_features, source_vis_imgs = self.get_mp_features(x['source'], gen_vis = gen_vis)
 
         depth_source = None
         depth_driving = None
@@ -402,24 +407,39 @@ class GeneratorFullModel(torch.nn.Module):
             value_total = self.loss_weights['depth_constraint']*torch.abs(depth_driving-depth_pred).mean()
             loss_values['depth_constraint'] = value_total
 
-        gen_mp_features = self.get_mp_features(generated['prediction'])
+        gen_mp_features, gen_vis_imgs = self.get_mp_features(generated['prediction'], gen_vis)
         if self.loss_weights["verilight"]:
-            mp_rmse = torch.mean((source_mp_features - gen_mp_features)**2)
+            # mp_rmse = torch.mean((source_mp_features - gen_mp_features)**2)
             mp_mape = self.mape(source_mp_features, gen_mp_features)
-            print(mp_rmse, mp_rmse.grad_fn, mp_mape, mp_mape.grad_fn)
+            assert mp_mape.grad_fn is not None
+            loss_values["verilight"] = mp_mape
 
 
-        # VIS ONLY #
-        for i in range(generated['prediction'].shape[0]):
-            gen = generated['prediction'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
-            gen = gen.astype(np.uint8)
-            source = x['source'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
-            source = source.astype(np.uint8)
-            driving = x['driving'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
-            driving = driving.astype(np.uint8)
-            stacked = np.hstack((source, driving, gen))
-            cv2.imwrite(f"res{i}.png", stacked[:,:,::-1])
-        
+        if gen_vis:
+            # create source, drive, generated visualization
+            generated_vis = []
+            mp_vis = []
+            for i in range(generated['prediction'].shape[0]):
+                gen = generated['prediction'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
+                gen = gen.astype(np.uint8)
+                source = x['source'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
+                source = source.astype(np.uint8)
+                driving = x['driving'][i,:,:,:].detach().cpu().permute(1, 2, 0).numpy() * 255
+                driving = driving.astype(np.uint8)
+                stacked = np.hstack((source, driving, gen))
+                stacked = stacked[:,:,::-1]
+                generated_vis.append(stacked)
+            
+                # stack the mediapipe visualizations to created one
+                stacked_mp_vis = np.vstack((source_vis_imgs[i], gen_vis_imgs[i]))
+                mp_vis.append(stacked_mp_vis)
+
+            generated["generated_vis"] = generated_vis
+            generated["mp_vis"] = mp_vis
+        else:
+            generated["generated_vis"] = None
+            generated["mp_vis"] = None
+
         return loss_values, generated
 
 

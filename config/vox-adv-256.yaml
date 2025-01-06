@@ -70,7 +70,7 @@ train_params:
     kp_prior: 0
     kp_scale: 0
     depth_constraint: 0
-    verilight : .5
+    verilight : .1
 
 reconstruction_params:
   num_videos: 1000

@@ -1,5 +1,6 @@
 from tqdm import trange
 import torch
+import cv2
 
 from torch.utils.data import DataLoader
 
@@ -72,7 +73,11 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
                 for i,x in enumerate(dataloader):
                     # x['source'] = x['source'].to(device)
                     # x['driving'] = x['driving'].to(device)
-                    losses_generator, generated = generator_full(x)
+                    losses_generator, generated = generator_full(x, gen_vis=True)
+
+                    for g in range(len(generated["generated_vis"])):
+                        cv2.imwrite(f"gen_{total*(epoch-start_epoch)+i + g}.png", generated["generated_vis"][g])
+                        cv2.imwrite(f"mp_{total*(epoch-start_epoch)+i + g}.png", generated["mp_vis"][g])
                     
                     loss_values = [val.mean() for val in losses_generator.values()]
                     loss = sum(loss_values)
