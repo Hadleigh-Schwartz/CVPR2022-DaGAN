@@ -1,0 +1,9 @@
+00000249) perceptual - 94.73902; gen_gan - 0.53356; feature_matching - 4.15943; equivariance_value - 0.30185; equivariance_jacobian - 0.58064; kp_distance - 2.44825; verilight - 3.09918; disc_gan - 0.31599
+00000250) perceptual - 94.19512; gen_gan - 0.53223; feature_matching - 4.14100; equivariance_value - 0.33113; equivariance_jacobian - 0.58682; kp_distance - 2.45545; verilight - 2.92604; disc_gan - 0.32254
+00000251) perceptual - 97.85140; gen_gan - 0.54946; feature_matching - 4.23992; equivariance_value - 0.29804; equivariance_jacobian - 0.55696; kp_distance - 2.54688; verilight - 2.88830; disc_gan - 0.29674
+00000252) perceptual - 95.78468; gen_gan - 0.53556; feature_matching - 4.23101; equivariance_value - 0.35106; equivariance_jacobian - 0.57570; kp_distance - 2.26116; verilight - 3.02777; disc_gan - 0.30771
+00000253) perceptual - 99.63792; gen_gan - 0.55965; feature_matching - 4.33650; equivariance_value - 0.37059; equivariance_jacobian - 0.58992; kp_distance - 2.31619; verilight - 2.86177; disc_gan - 0.28885
+00000254) perceptual - 98.67704; gen_gan - 0.56654; feature_matching - 4.32836; equivariance_value - 0.35228; equivariance_jacobian - 0.57780; kp_distance - 2.21799; verilight - 3.00494; disc_gan - 0.28967
+00000255) perceptual - 108.79182; gen_gan - 0.58625; feature_matching - 4.67241; equivariance_value - 0.39627; equivariance_jacobian - 0.62894; kp_distance - 2.25312; verilight - 2.83731; disc_gan - 0.26826
+00000256) perceptual - 112.61846; gen_gan - 0.58103; feature_matching - 4.82403; equivariance_value - 0.45831; equivariance_jacobian - 0.69820; kp_distance - 2.37503; verilight - 3.14660; disc_gan - 0.31879
+00000257) perceptual - 117.05765; gen_gan - 0.60575; feature_matching - 4.96083; equivariance_value - 0.47546; equivariance_jacobian - 0.70097; kp_distance - 2.64466; verilight - 2.89455; disc_gan - 0.25987

@@ -24,6 +24,7 @@ from sklearn.model_selection import train_test_split
 from imageio import mimread,imsave
 import pandas as pd
 from scipy.spatial import ConvexHull
+import glob
 def count_test_video(path):
     vis = {video[:video.find('#',8)] for video in
                                 os.listdir(path)}
@@ -242,7 +243,7 @@ def aus(path):
     
     # landmarks = detector.detect_landmarks(frame, face)  
     # score = detector.detect_aus(frame,landmarks[0])
-def evaluate_PRMSE_AUCON():
+def evaluate_PRMSE_AUCON(path):
     from feat import Detector
     detector = Detector()
     # x2face = '/data/fhongac/workspace/gitrepo/X2Face/UnwrapMosaic/FID'
@@ -250,8 +251,8 @@ def evaluate_PRMSE_AUCON():
     # osfv = '/data/fhongac/workspace/gitrepo/One-Shot_Free-View_Neural_Talking_Head_Synthesis/FID'
     # dagan = '/data/fhongac/workspace/src/parallel-fom-rgbd/FID'
     # test = dagan
-    path = sys.argv[1]
-    imgs = os.listdir(path+'/gt')
+    imgs = os.listdir(path+'\\gt')
+    # imgs = glob.glob(path+'\\gt\\*.jpg')
     PRMSE = 0
     AUCON = 0
     counter = 1e-9
@@ -270,6 +271,10 @@ def evaluate_PRMSE_AUCON():
         try:
             gt = os.path.join(path,'gt',im)
             gen = os.path.join(path,'generate',im)
+            # make sure gt and gen both exist
+            if not os.path.exists(gt) or not os.path.exists(gen):
+                raise RuntimeError('GT or Gen file not found')
+
             # gt_aus = detector.detect_aus(gt)
             # generate_aus = detector.detect_aus(gen)
 
@@ -278,6 +283,7 @@ def evaluate_PRMSE_AUCON():
 
             out_gt = detector.detect_image(gt)
             out_generat = detector.detect_image(gen)
+            print(out_generat, out_gt)
             gt_pose = out_gt.facepose.values
             generate_pose = out_generat.facepose.values
             gt_aus = out_gt.aus.values
@@ -316,6 +322,8 @@ def evaluate_PRMSE_AUCON():
         except Exception as e:
             print(e)
     print(' PRMSE: {}, AUCON : {}, CSIM: {}'.format(PRMSE/counter, AUCON/counter,CSIM/csim_counter))
+    return PRMSE/counter, AUCON/counter,CSIM/csim_counter
+
 def mergeimgs(paths):
     pth = paths[0]
     imgps = os.listdir(pth)

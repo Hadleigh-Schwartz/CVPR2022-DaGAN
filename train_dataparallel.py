@@ -16,6 +16,23 @@ from evaluation_dataset import EvaluationDataset
 from frames_dataset import DatasetRepeater
 
 
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=1):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = float('inf')
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss * self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+    
 def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, dataset, device_ids,opt,writer):
     train_params = config['train_params']
 
@@ -64,6 +81,7 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
         discriminator_full = DataParallelWithCallback(discriminator_full, device_ids=device_ids)
 
     with Logger(log_dir=log_dir, visualizer_params=config['visualizer_params'], checkpoint_freq=train_params['checkpoint_freq']) as logger:
+        early_stopper = EarlyStopper(patience=3, min_delta=1.1)
         for epoch in trange(start_epoch, train_params['num_epochs']):
             #parallel
             total = len(dataloader)
@@ -132,6 +150,8 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
             if (epoch + 1) % train_params['checkpoint_freq'] == 0:
                 epoch_eval_loss = 0
                 for i, data in tqdm(enumerate(test_dataloader)):
+                    if i > 200: # due to training time constraints, we will make the test dataset a bit smaller
+                        break
                     data['source'] = data['source'].cuda()
                     data['driving'] = data['driving'].cuda()
                     losses_generator, generated = generator_full(data) 
@@ -140,3 +160,6 @@ def train(config, generator, discriminator, kp_detector, checkpoint, log_dir, da
                     epoch_eval_loss+=loss.item()
                 epoch_eval_loss = epoch_eval_loss/len(test_dataloader)
                 writer.add_scalar('epoch_eval_loss', epoch_eval_loss, epoch)
+            if early_stopper.early_stop(epoch_eval_loss):
+                print("Early stopping")
+                break

@@ -176,7 +176,14 @@ class GeneratorFullModel(torch.nn.Module):
                                  6, 7, 8, 9, 10, 11, 12, 23, 25, 50, 51] 
         self.mp_aligner = MPAligner().to(device)
         self.mape = MeanAbsolutePercentageError()
+        self.cos_sim = torch.nn.CosineSimilarity(dim=0)
 
+    def cosine_distance(self, vec1, vec2):
+        normed_vec1 = vec1 / torch.norm(vec1)
+        normed_vec2 = vec2 / torch.norm(vec2)
+        cos_dist = 1 - self.cos_sim(normed_vec1, normed_vec2)
+        return cos_dist
+           
     def set_requires_grad(self, nets, requires_grad=False):
         """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
         Parameters:
@@ -416,16 +423,35 @@ class GeneratorFullModel(torch.nn.Module):
             gen_mp_features_ok  = (gen_mp_features != 0).all(dim=-1).detach()
             source_mp_features_ok_indices =  source_mp_features_ok.nonzero().squeeze().tolist()
             gen_mp_features_ok_indices = gen_mp_features_ok.nonzero().squeeze().tolist()
+            if type(source_mp_features_ok_indices) == int: # squeezing on just one el list yields a scalar, which calling .tolist() yields int
+                source_mp_features_ok_indices = [source_mp_features_ok_indices]
+            if type(gen_mp_features_ok_indices) == int: 
+                gen_mp_features_ok_indices = [gen_mp_features_ok_indices]
+            
             ok_indices = list(set(source_mp_features_ok_indices) & set(gen_mp_features_ok_indices))
             source_mp_features = source_mp_features[ok_indices]
             gen_mp_features = gen_mp_features[ok_indices]
     
             # mp_rmse = torch.mean((source_mp_features - gen_mp_features)**2)
-            mp_mape = self.mape(source_mp_features, gen_mp_features)
-            assert mp_mape.grad_fn is not None
-            loss_values["verilight"] = mp_mape
+            # mp_mape = self.mape(source_mp_features, gen_mp_features)        
+            cos_dist = self.cosine_distance(source_mp_features, gen_mp_features)
+            value = cos_dist * self.loss_weights["verilight"]
+            assert value.grad_fn is not None
+            loss_values["verilight"] = value
+            
+            # vector1 = torch.tensor([1.0, 2.0, 3.0])
+            # vector2 = torch.tensor([4.0, 5.0, 6.0])
+            # print(self.cosine_distance(vector1, vector2))
 
+            # vector1 = torch.tensor([1.0, 2.0, 3.0])
+            # vector2 = torch.tensor([1.0, 2.0, 3.0])
+            # print(self.cosine_distance(vector1, vector2))
 
+            # vector1 = torch.tensor([1.0, 2.0, 3.0])
+            # vector2 = torch.tensor([2.0, 3.0, 4.0])
+            # print(self.cosine_distance(vector1, vector2))
+
+    
         if gen_vis:
             # create source, drive, generated visualization
             generated_vis = []

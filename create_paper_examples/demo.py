@@ -4,6 +4,7 @@ import os, sys
 import yaml
 from argparse import ArgumentParser
 from tqdm import tqdm
+sys.path.append(r"C:\Users\mobil\Desktop\verilight_attacks\CVPR2022-DaGAN")
 import modules.generator as GEN
 import imageio
 import numpy as np
@@ -162,8 +163,8 @@ if __name__ == "__main__":
 
     depth_encoder = depth.ResnetEncoder(50, False)
     depth_decoder = depth.DepthDecoder(num_ch_enc=depth_encoder.num_ch_enc, scales=range(4))
-    loaded_dict_enc = torch.load('depth/models/encoder.pth')
-    loaded_dict_dec = torch.load('depth/models/depth.pth')
+    loaded_dict_enc = torch.load('../depth/models/encoder.pth')
+    loaded_dict_dec = torch.load('../depth/models/depth.pth')
     filtered_dict_enc = {k: v for k, v in loaded_dict_enc.items() if k in depth_encoder.state_dict()}
     depth_encoder.load_state_dict(filtered_dict_enc)
     depth_decoder.load_state_dict(loaded_dict_dec)
